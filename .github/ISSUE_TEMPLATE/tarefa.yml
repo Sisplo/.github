@@ -1,0 +1,37 @@
+name: Tarefa
+description: Trabalho a fazer — fatia de fase, ajuste, dívida a pagar
+labels: []
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: O que precisa existir
+      description: O resultado, não o caminho.
+    validations:
+      required: true
+  - type: textarea
+    id: criterio
+    attributes:
+      label: Critério de sucesso
+      description: >
+        Como se prova que ficou pronto — o comando que roda e o que ele mostra.
+        Regra de negócio nova (sobretudo cálculo financeiro ou fiscal) traz aqui os
+        exemplos de aceitação: entrada e saída esperada, definidos por quem pede.
+    validations:
+      required: true
+  - type: textarea
+    id: escopo
+    attributes:
+      label: O que fica de fora
+      description: >
+        O que esta tarefa deliberadamente não faz. Escopo declarado como fora não vira
+        cobrança de lacuna no review.
+    validations:
+      required: false
+  - type: input
+    id: origem
+    attributes:
+      label: De onde veio
+      description: Fase do plano, achado de auditoria, ADR, issue anterior.
+    validations:
+      required: false

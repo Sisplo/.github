@@ -1,0 +1,45 @@
+name: Defeito
+description: Algo que deveria funcionar e não funciona
+labels: ["bug"]
+body:
+  - type: textarea
+    id: sintoma
+    attributes:
+      label: O que acontece
+      description: O comportamento observado, não a causa suposta.
+      placeholder: Ao salvar o formulário de cadastro, a tela devolve 200 e nada é gravado.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que deveria acontecer
+    validations:
+      required: true
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Como reproduzir
+      description: Passo a passo. Sem reprodução, o conserto não tem como nascer vermelho.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: onde
+    attributes:
+      label: Onde apareceu
+      description: Palco de dev, CI, produção — e a versão ou o commit, se souber.
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidência
+      description: >
+        Log, stack trace, print. Nunca cole token, senha ou dado real de cliente —
+        mascare antes.
+    validations:
+      required: false

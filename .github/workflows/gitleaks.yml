@@ -1,0 +1,48 @@
+name: gitleaks (reusable)
+
+# Reusable workflow chamado pelo caller local de cada repo (o `.github/workflows/security.yml`
+# que o template repository entrega). Referenciado por TAG (@v1) no caller, não por SHA: SHA é
+# para action de terceiro; este workflow é da própria casa, e a tag deixa o Dependabot
+# (ecossistema github-actions) propor o bump quando sair @v2 — plano-fluxo-agentes.md §4/§5.
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # histórico completo — a varredura agendada no caller cobre tudo
+      # CLI do gitleaks (MIT, grátis), não a Action: a gitleaks-action v2 exige
+      # GITLEAKS_LICENSE (pago) em repositório de organização; o CLI roda sem licença e
+      # continua REAL e bloqueante.
+      # Baixar binário e executá-lo sem conferir nada é a forma mais direta de trazer código
+      # de terceiro para dentro do CI (CLAUDE.md global, regra 9). Três coisas fecham isso:
+      #   --fail   — sem ele, o curl grava a PÁGINA DE ERRO dentro do .tar.gz e a falha só
+      #              aparece adiante como "gzip: not in gzip format".
+      #   --retry  — blip de rede não deve derrubar o gate de segurança.
+      #   sha256   — a versão está fixada, mas tag do GitHub pode ser reapontada e download
+      #              pode ser adulterado no caminho; o hash é o que torna "v8.30.1" uma
+      #              promessa verificável.
+      # Fonte do hash: gitleaks_8.30.1_checksums.txt do próprio release. Limitação declarada:
+      # é fonte única — protege contra troca posterior do asset e download corrompido, não
+      # contra release comprometido na origem.
+      - name: instalar gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 10 --retry-all-errors \
+            --proto '=https' --proto-redir '=https' \
+            -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: gitleaks (bloqueante)
+        run: ./gitleaks git . --redact --exit-code 1 --verbose
