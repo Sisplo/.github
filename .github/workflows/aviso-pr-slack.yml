@@ -73,8 +73,17 @@ jobs:
         # SLACK_BOT_TOKEN chega como variável de ambiente do passo anterior
         # (Infisical/secrets-action, export-type "env", default — sob o próprio nome do
         # segredo no Infisical, sem passar pelo YAML nem por um output do job).
+        #
+        # Canal e texto também entram por ambiente, nunca por `${{ }}` dentro do script: o
+        # texto carrega o título da PR, escrito por terceiro, e interpolar isso no shell
+        # executa o que estiver entre crases ou em $(). Foi o que aconteceu na primeira
+        # rodada real: o nome do repositório vinha entre crases e sumiu da mensagem, porque
+        # o shell tentou executá-lo.
+        env:
+          CANAL: ${{ inputs.channel }}
+          TEXTO: ${{ steps.msg.outputs.texto }}
         run: |
           curl -sS --max-time 5 -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
             -H "Content-Type: application/json; charset=utf-8" \
-            -d "$(jq -n --arg ch "${{ inputs.channel }}" --arg tx "${{ steps.msg.outputs.texto }}" '{channel:$ch, text:$tx}')"
+            -d "$(jq -n --arg ch "$CANAL" --arg tx "$TEXTO" '{channel:$ch, text:$tx}')"
