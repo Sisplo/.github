@@ -1,3 +1,8 @@
+## Issue
+
+<!-- `Closes #123` (ou `Refs #123` se não fecha sozinha). Sem issue: diga por que — ex.
+     "fatia mecânica de um plano já aceito, sem issue própria". Nunca deixe em branco. -->
+
 ## O que muda e por quê
 
 <!-- O problema antes do remédio: o que estava errado ou faltando, e o que esta PR faz a
@@ -20,6 +25,7 @@
 - [ ] Verificação completa do projeto está verde
 - [ ] Documento de estado do repo atualizado, se esta PR fecha uma fatia
 - [ ] Decisão não trivial virou ADR novo (ADR não se edita)
+- [ ] Issue citada acima, ou o motivo de não ter uma
 
 <!-- Item de checklist específico deste repo (ex.: RLS, tipo de dinheiro, baseline de
      autorização) mora no pull_request_template.md LOCAL do repo, que sobrescreve este. -->
