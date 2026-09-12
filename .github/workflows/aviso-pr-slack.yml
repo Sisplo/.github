@@ -79,11 +79,24 @@ jobs:
         # executa o que estiver entre crases ou em $(). Foi o que aconteceu na primeira
         # rodada real: o nome do repositório vinha entre crases e sumiu da mensagem, porque
         # o shell tentou executá-lo.
+        #
+        # O Slack responde HTTP 200 mesmo quando recusa a mensagem (token inválido, bot fora
+        # do canal, canal renomeado) — o corpo vem com "ok":false e "error". `curl -f` não
+        # pega isso, e o job ficava verde sem ninguém receber nada. Fail-closed: token vazio
+        # ou "ok" != true reprova o job, com o motivo do Slack no log.
         env:
           CANAL: ${{ inputs.channel }}
           TEXTO: ${{ steps.msg.outputs.texto }}
         run: |
-          curl -sS --max-time 5 -X POST https://slack.com/api/chat.postMessage \
+          if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+            echo "::error::SLACK_BOT_TOKEN vazio — não veio do Infisical"
+            exit 1
+          fi
+          resposta="$(curl -sS --max-time 5 -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
             -H "Content-Type: application/json; charset=utf-8" \
-            -d "$(jq -n --arg ch "$CANAL" --arg tx "$TEXTO" '{channel:$ch, text:$tx}')"
+            -d "$(jq -n --arg ch "$CANAL" --arg tx "$TEXTO" '{channel:$ch, text:$tx}')")"
+          if [ "$(jq -r '.ok' <<< "$resposta")" != "true" ]; then
+            echo "::error::Slack recusou a mensagem: $(jq -r '.error' <<< "$resposta")"
+            exit 1
+          fi
