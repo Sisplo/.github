@@ -1,9 +1,17 @@
-name: gitleaks (reusable)
+name: varredura de segredos (reusable)
 
-# Reusable workflow chamado pelo caller local de cada repo (o `.github/workflows/security.yml`
-# que o template repository entrega). Referenciado por TAG (@v1) no caller, não por SHA: SHA é
-# para action de terceiro; este workflow é da própria casa, e a tag deixa o Dependabot
-# (ecossistema github-actions) propor o bump quando sair @v2 — plano-fluxo-agentes.md §4/§5.
+# Reusable workflow: a FONTE ÚNICA da varredura de segredos da casa. Chamado pelo
+# `secret-scan.yml` deste mesmo repositório, que é o workflow exigido pelo ruleset da
+# organização. Referenciado por TAG (@v1), não por SHA: SHA é para action de terceiro; este
+# workflow é da própria casa, e a tag deixa o Dependabot (ecossistema github-actions) propor o
+# bump quando sair @v2 — plano-fluxo-agentes.md §4/§5.
+#
+# ⚠️ O arquivo ainda se chama `gitleaks.yml` e agora roda DUAS ferramentas. O rename fica para
+# a leva seguinte, depois que os callers por repo saírem: renomear agora quebraria todo caller
+# que referencia `gitleaks.yml@v1` e misturaria migração com consolidação.
+#
+# ⚠️ Mover a tag `v1` NÃO alcança run já existente: reexecução repete a versão resolvida no run
+# original — medido em 2026-09-11. Quem pega a tag nova é run novo.
 
 on:
   workflow_call: {}
@@ -44,5 +52,69 @@ jobs:
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf gitleaks.tar.gz gitleaks
+      # --log-opts="--all": varre TODAS as refs, não só a história alcançável pelo HEAD do
+      # checkout. Segredo empurrado em branch que nunca virou PR ficava fora da varredura.
+      # --redact é obrigatório: sem ele o segredo achado aparece em claro no log do Actions,
+      # que é um segundo vazamento.
       - name: gitleaks (bloqueante)
-        run: ./gitleaks git . --redact --exit-code 1 --verbose
+        run: ./gitleaks git . --redact --exit-code 1 --verbose --log-opts="--all"
+
+  # Complementa o gitleaks, não repete: o gitleaks sinaliza todo achado por PADRÃO; o
+  # TruffleHog testa a credencial AO VIVO contra a API do provedor que a emitiu e só reporta a
+  # que ainda é válida — menos ruído, mais sinal de dano real.
+  #
+  # Binário do release com sha256 fixado, mesmo padrão do gitleaks acima, e não a Action de
+  # terceiro nem `curl | sh` de instalador servido por branch móvel: aquele caminho executa
+  # código que pode mudar entre dois runs, sem nada para conferir (CLAUDE.md global, regra 9).
+  # Versão e hash vêm do `security.yml` do sisplo-erp, onde já estavam verificados.
+  #
+  # Licença AGPL-3.0: uso como binário standalone em CI, sem modificar o código nem servir a
+  # rede, não aciona o gatilho de copyleft da seção 13 (que exige "modificar + oferecer
+  # interação remota").
+  trufflehog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: instalar trufflehog
+        env:
+          TRUFFLEHOG_VERSION: "3.97.2"
+          TRUFFLEHOG_SHA256: "6a767a0ae95ba0c51628b37a6bb938765be17b9b6d7ad8b9a810da56f63656c1"
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 10 --retry-all-errors \
+            --proto '=https' --proto-redir '=https' \
+            -o trufflehog.tar.gz \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz"
+          echo "${TRUFFLEHOG_SHA256}  trufflehog.tar.gz" | sha256sum --check --strict
+          tar -xzf trufflehog.tar.gz trufflehog
+      # ⚠️ A saída do TruffleHog NUNCA redige a credencial — o campo `Raw` vem em texto puro,
+      # ao contrário do gitleaks, que tem `--redact`. Imprimir o resultado colaria a credencial
+      # AINDA VÁLIDA no log do Actions bem no momento em que o gate dispara: um segundo
+      # vazamento, causado pela detecção do primeiro. Por isso o JSON vai para um arquivo que
+      # nunca é impresso nem sobe como artefato, e só campo seguro (detector, arquivo, linha,
+      # commit) chega ao log.
+      - name: trufflehog (bloqueante, só credencial verificada ao vivo)
+        run: |
+          set +e
+          ./trufflehog git file://. --results=verified --json --fail --no-update > trufflehog-resultado.json
+          codigo_saida=$?
+          set -e
+          if [ "$codigo_saida" -ne 0 ]; then
+            echo "::error::TruffleHog achou credencial verificada e AINDA VÁLIDA — rotacione/revogue antes de mergear. Detalhe (sem o valor, de propósito):"
+            python3 - trufflehog-resultado.json <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              for linha in f:
+                  linha = linha.strip()
+                  if not linha:
+                      continue
+                  achado = json.loads(linha)
+                  git = achado.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+                  commit = git.get("commit", "")[:7]
+                  print(f"- {achado.get('DetectorName')}: {git.get('file')}:{git.get('line')} (commit {commit})")
+          PY
+          fi
+          rm -f trufflehog-resultado.json
+          exit "$codigo_saida"
