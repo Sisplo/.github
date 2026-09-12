@@ -46,7 +46,12 @@ jobs:
           identity-id: ${{ vars.INFISICAL_SLACK_IDENTITY_ID }}
           project-slug: ${{ inputs.infisical-project-slug }}
           env-slug: "dev"
-          secret-path: "/"
+          # Caminho dedicado, não a raiz: a raiz do ambiente dev carrega outros segredos do
+          # projeto (ex.: chaves de provedor), e a action exporta pro job tudo que encontra
+          # no caminho pedido. Com "/" o job de aviso enxergava o ambiente inteiro; com
+          # "/ci" só o que mora ali. O SLACK_BOT_TOKEN precisa existir em /ci em cada
+          # projeto antes desta mudança ir ao ar — handbook/adocao-integracoes.md.
+          secret-path: "/ci"
 
       - name: Monta a mensagem
         id: msg
