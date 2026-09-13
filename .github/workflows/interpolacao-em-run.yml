@@ -1,0 +1,52 @@
+name: cerca de interpolação em run (reusable)
+
+# Reusable workflow: a FONTE ÚNICA da cerca SEG-CD-02 da casa — interpolação de contexto
+# controlável (`${{ github.event... }}` e afins) dentro de `run:`. `${{ }}` é substituição de
+# TEXTO antes do shell: o valor vira código. A correção é passar por `env:` e ler "$VAR".
+#
+# O script mora em `.github/scripts/checa-interpolacao-em-run.py` deste repositório. Veio do
+# sisplo-erp, onde a cerca nasceu e passou por dez rodadas de revisão (ESTADO §1ew de lá). O
+# autoteste dele — 49 casos de decisão e 9 de linha — roda no `interpolacao-autoteste.yml`.
+#
+# 🚨 POR QUE O SCRIPT VEM DA `main` DESTE REPOSITÓRIO, E NÃO DO CHAMADOR: quem decide precisa
+# ser código já revisado. Se o script viesse do checkout da PR, a própria PR poderia trocá-lo por
+# `exit 0`. Aqui o ALVO continua sendo a árvore da PR; só o INSPETOR vem de fora dela. É o desenho
+# "cerca da base" do sisplo-erp, agora com a base fora do alcance de qualquer repo consumidor.
+#
+# ⚠️ Chamado pelo `secret-scan.yml`, que o ruleset da organização exige em todos os repos. Job
+# novo nesse caminho vale no instante do merge, sem tag amortecendo.
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  cerca:
+    runs-on: ubuntu-latest
+    steps:
+      # O ALVO: a árvore do repositório chamador — em PR, o merge ref. Sem credencial
+      # persistida: a cerca só lê.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # O INSPETOR: só a pasta de scripts deste repositório, lida da `main`. Esparso de propósito:
+      # a cerca procura `action.y*ml` a partir do diretório atual, e um checkout inteiro do .github
+      # dentro da árvore faria ela varrer arquivo que não pertence ao chamador.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Sisplo/.github
+          ref: main
+          path: .sisplo-github
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # PyYAML: a cerca usa parser, não regex. O `||` só instala quando o parser FALTA na imagem,
+      # e instala versão fixa. Limitação declarada, a mesma do sisplo-erp: fixa por versão, não
+      # por hash — hash deixaria o gate vermelho sozinho a cada minor de Python da imagem, e o
+      # caminho normal deste passo é não instalar nada.
+      - name: PyYAML para a cerca
+        run: python3 -c "import yaml" || pip install --quiet "pyyaml==6.0.3"
+      - name: interpolação de contexto controlável em run (SEG-CD-02)
+        run: python3 .sisplo-github/.github/scripts/checa-interpolacao-em-run.py .github/workflows

@@ -1,0 +1,28 @@
+name: autoteste da cerca de interpolação
+
+# Exercita a versão DA PR do script, porque o gate imposto usa a da `main` por desenho: sem este
+# workflow, mudança na cerca entraria sem ninguém exercitá-la. Se uma PR neutralizar o script E o
+# autoteste ao mesmo tempo, o gate imposto — que roda o script da `main` — continua de pé.
+#
+# Sem filtro de caminho, de propósito: é leitura de fonte e custa segundos, e filtro por caminho é
+# o tipo de otimização que deixa uma mudança passar por fora.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  autoteste:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: PyYAML para a cerca
+        run: python3 -c "import yaml" || pip install --quiet "pyyaml==6.0.3"
+      - name: autoteste da cerca desta PR (SEG-CD-02)
+        run: python3 .github/scripts/checa-interpolacao-em-run.py --autoteste
